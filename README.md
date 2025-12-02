@@ -219,3 +219,4 @@ php artisan view:clear
 ## 📄 Licença
 
 Este projeto é de código aberto e está disponível sob a licença MIT.
+# hotel
