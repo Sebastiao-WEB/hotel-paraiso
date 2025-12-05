@@ -42,6 +42,9 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/checkin/{id}/realizar-checkin', [CheckinController::class, 'realizarCheckin'])->name('checkin.realizar');
     Route::post('/checkin/direto', [CheckinController::class, 'realizarCheckinDireto'])->name('checkin.direto');
     Route::post('/checkin/{id}/realizar-checkout', [CheckinController::class, 'realizarCheckout'])->name('checkin.checkout');
+    Route::post('/checkin/stay/{id}/checkout', [CheckinController::class, 'realizarCheckoutStay'])->name('checkin.stay.checkout');
+    Route::post('/checkin/stay/{id}/cancelar', [CheckinController::class, 'cancelarStay'])->name('checkin.stay.cancelar');
+    Route::get('/checkin/quartos-disponiveis', [CheckinController::class, 'getQuartosDisponiveis'])->name('checkin.quartos-disponiveis');
     Route::post('/checkin/{id}/adicionar-servico', [CheckinController::class, 'adicionarServico'])->name('checkin.adicionar-servico');
     
     // Serviços Extras

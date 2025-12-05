@@ -3,9 +3,11 @@
 namespace App\Livewire\Checkin;
 
 use App\Models\Reserva;
+use App\Models\Stay;
 use App\Models\ServicoExtra;
 use App\Models\Cliente;
 use App\Models\Quarto;
+use App\Services\CheckinService;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Carbon\Carbon;
@@ -15,17 +17,27 @@ class Index extends Component
     use WithPagination;
 
     public $reservaSelecionada = null;
+    public $staySelecionada = null;
     public $mostrarCheckin = false;
     public $mostrarCheckout = false;
+    public $mostrarCheckoutStay = false;
     public $servicosSelecionados = [];
     public $tipoPagamento = '';
     
-    // Propriedades para check-in direto
+    // Propriedades para check-in direto (walk-in)
     public $mostrarCheckinDireto = false;
     public $cliente_id = null;
     public $quarto_id = null;
-    public $data_entrada = null;
-    public $data_saida = null;
+    public $check_in_at = null;
+    public $expected_check_out_at = null;
+    public $notes = null;
+
+    protected $checkinService;
+
+    public function boot(CheckinService $checkinService)
+    {
+        $this->checkinService = $checkinService;
+    }
 
     public function abrirCheckin($reservaId)
     {
@@ -127,18 +139,18 @@ class Index extends Component
     }
 
     /**
-     * Abre o modal para check-in direto (sem reserva prévia)
+     * Abre o modal para check-in direto (walk-in)
      */
     public function abrirCheckinDireto()
     {
-        $this->data_entrada = Carbon::today()->format('Y-m-d');
-        $this->data_saida = Carbon::today()->addDay()->format('Y-m-d');
+        $this->check_in_at = now()->format('Y-m-d\TH:i');
+        $this->expected_check_out_at = now()->addDay()->format('Y-m-d\TH:i');
         $this->mostrarCheckinDireto = true;
-        $this->reset(['cliente_id', 'quarto_id']);
+        $this->reset(['cliente_id', 'quarto_id', 'notes']);
     }
 
     /**
-     * Realiza check-in direto sem reserva prévia
+     * Realiza check-in direto usando o Service
      */
     public function realizarCheckinDireto()
     {
@@ -146,56 +158,71 @@ class Index extends Component
         $this->validate([
             'cliente_id' => 'required|exists:clientes,id',
             'quarto_id' => 'required|exists:quartos,id',
-            'data_entrada' => 'required|date|before_or_equal:today',
-            'data_saida' => 'required|date|after:data_entrada',
+            'check_in_at' => 'nullable|date|before_or_equal:now',
+            'expected_check_out_at' => 'required|date|after:check_in_at',
+            'notes' => 'nullable|string|max:1000',
         ], [
             'cliente_id.required' => 'Selecione um cliente.',
             'quarto_id.required' => 'Selecione um quarto.',
-            'data_entrada.required' => 'Informe a data de entrada.',
-            'data_entrada.before_or_equal' => 'A data de entrada deve ser hoje ou anterior.',
-            'data_saida.required' => 'Informe a data de saída.',
-            'data_saida.after' => 'A data de saída deve ser posterior à data de entrada.',
+            'expected_check_out_at.required' => 'Informe a data prevista de saída.',
+            'expected_check_out_at.after' => 'A data de saída deve ser posterior à data de entrada.',
         ]);
 
-        $quarto = Quarto::findOrFail($this->quarto_id);
-        $dataEntrada = Carbon::parse($this->data_entrada);
-        $dataSaida = Carbon::parse($this->data_saida);
+        try {
+            $data = [
+                'guest_id' => $this->cliente_id,
+                'room_id' => $this->quarto_id,
+                'check_in_at' => $this->check_in_at ?? now()->toDateTimeString(),
+                'expected_check_out_at' => $this->expected_check_out_at,
+                'notes' => $this->notes,
+            ];
 
-        // Verifica se o quarto está disponível para o período
-        if (!$quarto->isDisponivelParaPeriodo($dataEntrada, $dataSaida)) {
-            session()->flash('error', 'O quarto selecionado não está disponível para o período informado!');
+            $stay = $this->checkinService->createWalkInCheckin($data);
+
+            session()->flash('success', 'Check-in direto realizado com sucesso!');
+            $this->mostrarCheckinDireto = false;
+            $this->reset(['cliente_id', 'quarto_id', 'check_in_at', 'expected_check_out_at', 'notes']);
+        } catch (\Exception $e) {
+            session()->flash('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Abre modal de check-out para estadia direta
+     */
+    public function abrirCheckoutStay($stayId)
+    {
+        $this->staySelecionada = Stay::with(['guest', 'room'])->findOrFail($stayId);
+        $this->mostrarCheckoutStay = true;
+    }
+
+    /**
+     * Realiza check-out de uma estadia direta
+     */
+    public function realizarCheckoutStay()
+    {
+        if (!$this->staySelecionada || !$this->staySelecionada->isActive()) {
+            session()->flash('error', 'Apenas estadias ativas podem fazer check-out!');
             return;
         }
 
-        // Verifica se o quarto não está ocupado
-        if ($quarto->isOcupado()) {
-            session()->flash('error', 'O quarto selecionado está ocupado!');
+        if (!$this->tipoPagamento) {
+            session()->flash('error', 'Selecione a forma de pagamento!');
             return;
         }
 
-        // Calcula o valor total
-        $dias = $dataEntrada->diffInDays($dataSaida);
-        $valorTotal = $dias * $quarto->preco_diaria;
+        try {
+            $this->checkinService->checkout($this->staySelecionada->id, [
+                'payment_type' => $this->tipoPagamento,
+            ]);
 
-        // Cria a reserva com status "checkin" diretamente
-        $reserva = Reserva::create([
-            'cliente_id' => $this->cliente_id,
-            'quarto_id' => $this->quarto_id,
-            'data_entrada' => $dataEntrada,
-            'data_saida' => $dataSaida,
-            'status' => 'checkin',
-            'valor_total' => $valorTotal,
-            'checkin_em' => now(),
-            'checkin_por' => auth()->id(),
-            'criado_por' => auth()->id(),
-        ]);
-
-        // Atualiza o estado do quarto para ocupado
-        $quarto->update(['estado' => 'ocupado']);
-
-        session()->flash('success', 'Check-in direto realizado com sucesso!');
-        $this->mostrarCheckinDireto = false;
-        $this->reset(['cliente_id', 'quarto_id', 'data_entrada', 'data_saida']);
+            session()->flash('success', 'Check-out realizado com sucesso!');
+            $this->mostrarCheckoutStay = false;
+            $this->staySelecionada = null;
+            $this->tipoPagamento = '';
+        } catch (\Exception $e) {
+            session()->flash('error', $e->getMessage());
+        }
     }
 
     public function render()
@@ -207,22 +234,38 @@ class Index extends Component
             ->orderBy('data_entrada')
             ->get();
 
-        // Reservas em check-in aguardando check-out (inclui check-ins diretos)
+        // Reservas em check-in aguardando check-out
         $reservasCheckout = Reserva::where('status', 'checkin')
             ->whereDate('data_saida', '<=', Carbon::today())
             ->with(['cliente', 'quarto'])
             ->orderBy('data_saida')
             ->get();
 
+        // Estadias diretas (walk-in) ativas aguardando check-out
+        $staysCheckout = Stay::where('status', 'active')
+            ->where('expected_check_out_at', '<=', now())
+            ->with(['guest', 'room', 'createdBy'])
+            ->orderBy('expected_check_out_at')
+            ->get();
+
         $servicos = ServicoExtra::all();
 
         // Dados para o modal de check-in direto
         $clientes = Cliente::orderBy('nome')->get();
-        $quartosDisponiveis = Quarto::whereIn('estado', ['disponivel', 'limpeza'])
-            ->orderBy('numero')
-            ->get();
+        
+        // Busca quartos disponíveis usando o Service
+        $quartosDisponiveis = $this->checkinService 
+            ? $this->checkinService->getAvailableRooms()
+            : Quarto::whereIn('estado', ['disponivel', 'limpeza'])->orderBy('numero')->get();
 
-        return view('livewire.checkin.index', compact('reservasCheckin', 'reservasCheckout', 'servicos', 'clientes', 'quartosDisponiveis'));
+        return view('livewire.checkin.index', compact(
+            'reservasCheckin', 
+            'reservasCheckout', 
+            'staysCheckout',
+            'servicos', 
+            'clientes', 
+            'quartosDisponiveis'
+        ));
     }
 }
 

@@ -29,6 +29,14 @@ class Quarto extends Model
         return $this->hasMany(Reserva::class);
     }
 
+    /**
+     * Relacionamento com estadias diretas (walk-in)
+     */
+    public function stays()
+    {
+        return $this->hasMany(Stay::class, 'room_id');
+    }
+
     public function isDisponivel()
     {
         return $this->estado === 'disponivel';

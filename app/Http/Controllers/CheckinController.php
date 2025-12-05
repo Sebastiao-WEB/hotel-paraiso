@@ -3,18 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reserva;
+use App\Models\Stay;
 use App\Models\ServicoExtra;
 use App\Models\NotaCobranca;
 use App\Models\Cliente;
 use App\Models\Quarto;
+use App\Services\CheckinService;
+use App\Http\Requests\StoreWalkInCheckinRequest;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class CheckinController extends Controller
 {
+    protected $checkinService;
+
+    public function __construct(CheckinService $checkinService)
+    {
+        $this->checkinService = $checkinService;
+    }
+
     /**
      * Exibe a página de check-in/check-out
-     * Inclui reservas confirmadas aguardando check-in e check-ins diretos aguardando check-out
+     * Inclui reservas confirmadas aguardando check-in, check-ins diretos e estadias ativas
      */
     public function index()
     {
@@ -25,69 +35,100 @@ class CheckinController extends Controller
             ->orderBy('data_entrada')
             ->get();
 
-        // Reservas em check-in aguardando check-out (inclui check-ins diretos)
+        // Reservas em check-in aguardando check-out
         $reservasCheckout = Reserva::where('status', 'checkin')
             ->whereDate('data_saida', '<=', Carbon::today())
             ->with(['cliente', 'quarto'])
             ->orderBy('data_saida')
             ->get();
 
+        // Estadias diretas ativas (walk-in) aguardando check-out
+        $staysCheckout = Stay::where('status', 'active')
+            ->where('expected_check_out_at', '<=', now())
+            ->with(['guest', 'room', 'createdBy'])
+            ->orderBy('expected_check_out_at')
+            ->get();
+
         $servicos = ServicoExtra::all();
 
-        return view('checkin.index', compact('reservasCheckin', 'reservasCheckout', 'servicos'));
+        return view('checkin.index', compact('reservasCheckin', 'reservasCheckout', 'staysCheckout', 'servicos'));
     }
 
     /**
-     * Realiza check-in direto sem reserva prévia
-     * Cria uma reserva com status "checkin" diretamente
+     * Realiza check-in direto (walk-in) sem reserva prévia
+     * Usa o Service para encapsular a lógica de negócio
      */
-    public function realizarCheckinDireto(Request $request)
+    public function realizarCheckinDireto(StoreWalkInCheckinRequest $request)
     {
-        $validated = $request->validate([
-            'cliente_id' => 'required|exists:clientes,id',
-            'quarto_id' => 'required|exists:quartos,id',
-            'data_entrada' => 'required|date|before_or_equal:today',
-            'data_saida' => 'required|date|after:data_entrada',
+        try {
+            $stay = $this->checkinService->createWalkInCheckin($request->validated());
+
+            return redirect()->route('admin.checkin.index')
+                ->with('success', 'Check-in direto realizado com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()->route('admin.checkin.index')
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Realiza check-out de uma estadia direta (walk-in)
+     */
+    public function realizarCheckoutStay(Request $request, $id)
+    {
+        $request->validate([
+            'payment_type' => 'required|in:dinheiro,cartao',
         ]);
 
-        $quarto = Quarto::findOrFail($validated['quarto_id']);
-        $dataEntrada = Carbon::parse($validated['data_entrada']);
-        $dataSaida = Carbon::parse($validated['data_saida']);
+        try {
+            $stay = $this->checkinService->checkout($id, [
+                'payment_type' => $request->payment_type,
+            ]);
 
-        // Verifica se o quarto está disponível para o período
-        if (!$quarto->isDisponivelParaPeriodo($dataEntrada, $dataSaida)) {
+            // Se o cliente for empresa, gerar nota de cobrança
+            if ($stay->guest->isEmpresa()) {
+                $numeroNota = 'NC-' . str_pad(NotaCobranca::max('id') + 1, 6, '0', STR_PAD_LEFT);
+                NotaCobranca::create([
+                    'reserva_id' => null, // Não há reserva para walk-in
+                    'empresa_id' => $stay->guest_id,
+                    'valor_total' => $stay->total_amount,
+                    'data_emissao' => now(),
+                    'numero_nota' => $numeroNota,
+                ]);
+            }
+
             return redirect()->route('admin.checkin.index')
-                ->with('error', 'O quarto selecionado não está disponível para o período informado!');
-        }
-
-        // Verifica se o quarto não está ocupado
-        if ($quarto->isOcupado()) {
+                ->with('success', 'Check-out realizado com sucesso!');
+        } catch (\Exception $e) {
             return redirect()->route('admin.checkin.index')
-                ->with('error', 'O quarto selecionado está ocupado!');
+                ->with('error', $e->getMessage());
         }
+    }
 
-        // Calcula o valor total
-        $dias = $dataEntrada->diffInDays($dataSaida);
-        $valorTotal = $dias * $quarto->preco_diaria;
+    /**
+     * Cancela uma estadia direta ativa
+     */
+    public function cancelarStay($id)
+    {
+        try {
+            $this->checkinService->cancel($id);
 
-        // Cria a reserva com status "checkin" diretamente
-        $reserva = Reserva::create([
-            'cliente_id' => $validated['cliente_id'],
-            'quarto_id' => $validated['quarto_id'],
-            'data_entrada' => $dataEntrada,
-            'data_saida' => $dataSaida,
-            'status' => 'checkin',
-            'valor_total' => $valorTotal,
-            'checkin_em' => now(),
-            'checkin_por' => auth()->id(),
-            'criado_por' => auth()->id(),
-        ]);
+            return redirect()->route('admin.checkin.index')
+                ->with('success', 'Estadia cancelada com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()->route('admin.checkin.index')
+                ->with('error', $e->getMessage());
+        }
+    }
 
-        // Atualiza o estado do quarto para ocupado
-        $quarto->update(['estado' => 'ocupado']);
+    /**
+     * Retorna quartos disponíveis para check-in direto
+     */
+    public function getQuartosDisponiveis()
+    {
+        $quartos = $this->checkinService->getAvailableRooms();
 
-        return redirect()->route('admin.checkin.index')
-            ->with('success', 'Check-in direto realizado com sucesso!');
+        return response()->json($quartos);
     }
 
     /**

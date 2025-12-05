@@ -30,6 +30,14 @@ class Cliente extends Model
         return $this->hasMany(Reserva::class);
     }
 
+    /**
+     * Relacionamento com estadias diretas (walk-in)
+     */
+    public function stays()
+    {
+        return $this->hasMany(Stay::class, 'guest_id');
+    }
+
     public function notasCobranca()
     {
         return $this->hasMany(NotaCobranca::class, 'empresa_id');

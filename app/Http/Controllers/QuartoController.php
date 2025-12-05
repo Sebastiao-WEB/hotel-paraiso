@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Quarto;
+use App\Models\Reserva;
+use App\Models\Stay;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class QuartoController extends Controller
 {
@@ -77,16 +80,72 @@ class QuartoController extends Controller
         return redirect()->route('admin.quartos.index')->with('success', 'Quarto excluído com sucesso!');
     }
 
+    /**
+     * Exibe detalhes do quarto incluindo informações de ocupação
+     */
     public function show($id)
     {
         $quarto = Quarto::findOrFail($id);
-        return view('quartos.show', compact('quarto'));
+        
+        // Reserva ativa (em check-in)
+        $reservaAtiva = Reserva::where('quarto_id', $quarto->id)
+            ->where('status', 'checkin')
+            ->where('data_saida', '>=', Carbon::today())
+            ->with(['cliente', 'servicos.servico'])
+            ->first();
+        
+        // Estadia direta ativa (walk-in)
+        $stayAtiva = Stay::where('room_id', $quarto->id)
+            ->where('status', 'active')
+            ->with(['guest', 'createdBy'])
+            ->first();
+        
+        // Reservas confirmadas futuras
+        $reservasFuturas = Reserva::where('quarto_id', $quarto->id)
+            ->where('status', 'confirmada')
+            ->where('data_entrada', '>=', Carbon::today())
+            ->with(['cliente'])
+            ->orderBy('data_entrada')
+            ->limit(5)
+            ->get();
+        
+        // Histórico recente (últimas 10 ocupações)
+        $historicoReservas = Reserva::where('quarto_id', $quarto->id)
+            ->whereIn('status', ['checkout', 'cancelada'])
+            ->with(['cliente'])
+            ->orderBy('checkout_em', 'desc')
+            ->limit(5)
+            ->get();
+        
+        $historicoStays = Stay::where('room_id', $quarto->id)
+            ->whereIn('status', ['completed', 'cancelled'])
+            ->with(['guest'])
+            ->orderBy('actual_check_out_at', 'desc')
+            ->limit(5)
+            ->get();
+        
+        return view('quartos.show', compact(
+            'quarto', 
+            'reservaAtiva', 
+            'stayAtiva', 
+            'reservasFuturas',
+            'historicoReservas',
+            'historicoStays'
+        ));
     }
 
+    /**
+     * Altera o estado de um quarto
+     */
     public function alterarEstado(Request $request, $id)
     {
         $quarto = Quarto::findOrFail($id);
-        $quarto->update(['estado' => $request->estado]);
+        
+        $validated = $request->validate([
+            'estado' => 'required|in:disponivel,reservado,ocupado,limpeza',
+        ]);
+
+        $quarto->update(['estado' => $validated['estado']]);
 
         return response()->json(['success' => true, 'message' => 'Estado atualizado com sucesso!']);
     }
