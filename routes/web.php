@@ -34,11 +34,13 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::resource('reservas', ReservaController::class);
     Route::post('/reservas/{id}/confirmar', [ReservaController::class, 'confirmar'])->name('reservas.confirmar');
     Route::post('/reservas/{id}/cancelar', [ReservaController::class, 'cancelar'])->name('reservas.cancelar');
+    Route::post('/reservas/{id}/estender', [ReservaController::class, 'estender'])->name('reservas.estender');
     Route::get('/reservas/quartos-disponiveis', [ReservaController::class, 'getQuartosDisponiveis'])->name('reservas.quartos-disponiveis');
     
     // Check-in/Check-out
     Route::get('/checkin', [CheckinController::class, 'index'])->name('checkin.index');
     Route::post('/checkin/{id}/realizar-checkin', [CheckinController::class, 'realizarCheckin'])->name('checkin.realizar');
+    Route::post('/checkin/direto', [CheckinController::class, 'realizarCheckinDireto'])->name('checkin.direto');
     Route::post('/checkin/{id}/realizar-checkout', [CheckinController::class, 'realizarCheckout'])->name('checkin.checkout');
     Route::post('/checkin/{id}/adicionar-servico', [CheckinController::class, 'adicionarServico'])->name('checkin.adicionar-servico');
     

@@ -102,7 +102,7 @@
         }
         
         .footer-link {
-            color: #ccc;
+            color: #fff;
             text-decoration: none;
             transition: color 0.3s;
         }
@@ -164,8 +164,8 @@
         <div class="container">
             <div class="row g-4">
                 <div class="col-md-4">
-                    <h5 class="mb-3">🏨 Hotel Paraíso</h5>
-                    <p class="text-muted">O refúgio perfeito no coração de Nampula. Oferecemos conforto, elegância e hospitalidade excepcional.</p>
+                    <h5 class="mb-3 text-white">🏨 Hotel Paraíso</h5>
+                    <p class="text-white">O refúgio perfeito no coração de Nampula. Oferecemos conforto, elegância e hospitalidade excepcional.</p>
                     <div class="mt-3">
                         <a href="#" class="text-white me-3"><i class="bi bi-facebook fs-5"></i></a>
                         <a href="#" class="text-white me-3"><i class="bi bi-instagram fs-5"></i></a>
@@ -174,31 +174,31 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <h5 class="mb-3">Links Rápidos</h5>
+                    <h5 class="mb-3 text-white">Links Rápidos</h5>
                     <ul class="list-unstyled">
-                        <li><a href="{{ route('public.home') }}" class="footer-link">Início</a></li>
-                        <li><a href="{{ route('public.rooms') }}" class="footer-link">Quartos</a></li>
-                        <li><a href="{{ route('public.services') }}" class="footer-link">Serviços</a></li>
-                        <li><a href="{{ route('public.about') }}" class="footer-link">Sobre Nós</a></li>
-                        <li><a href="{{ route('public.contact') }}" class="footer-link">Contato</a></li>
+                        <li><a href="{{ route('public.home') }}" class="text-white footer-link">Início</a></li>
+                        <li><a href="{{ route('public.rooms') }}" class="text-white footer-link">Quartos</a></li>
+                        <li><a href="{{ route('public.services') }}" class="text-white footer-link">Serviços</a></li>
+                        <li><a href="{{ route('public.about') }}" class="text-white footer-link">Sobre Nós</a></li>
+                        <li><a href="{{ route('public.contact') }}" class="text-white footer-link">Contato</a></li>
                     </ul>
                 </div>
                 <div class="col-md-4">
-                    <h5 class="mb-3">Contato</h5>
-                    <p class="text-muted mb-2">
+                    <h5 class="mb-3 text-white">Contato</h5>
+                    <p class="text-white mb-2">
                         <i class="bi bi-geo-alt me-2"></i> Av. Principal, Nampula, Moçambique
                     </p>
-                    <p class="text-muted mb-2">
+                    <p class="text-white mb-2">
                         <i class="bi bi-telephone me-2"></i> +258 84 123 4567
                     </p>
-                    <p class="text-muted mb-2">
+                    <p class="text-white mb-2">
                         <i class="bi bi-envelope me-2"></i> info@hotelparaiso.co.mz
                     </p>
                 </div>
             </div>
             <hr class="my-4 bg-secondary">
-            <div class="text-center text-muted">
-                <p class="mb-0">&copy; {{ date('Y') }} Hotel Paraíso. Todos os direitos reservados.</p>
+            <div class="text-center">
+                <p class="mb-0 text-white">&copy; {{ date('Y') }} Hotel Paraíso. Todos os direitos reservados.</p>
             </div>
         </div>
     </footer>

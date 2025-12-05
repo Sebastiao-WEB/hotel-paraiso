@@ -77,6 +77,13 @@
                             @if($reserva->status === 'pendente')
                                 <button wire:click="confirmar({{ $reserva->id }})" class="text-green-600 hover:text-green-900">Confirmar</button>
                             @endif
+                            @if($reserva->status === 'checkin')
+                                <button wire:click="abrirModalExtensao({{ $reserva->id }})" 
+                                        class="text-orange-600 hover:text-orange-900" 
+                                        title="Estender Reserva">
+                                    Estender
+                                </button>
+                            @endif
                             @if(!in_array($reserva->status, ['checkout', 'cancelada']))
                                 <button wire:click="cancelar({{ $reserva->id }})" class="text-red-600 hover:text-red-900">Cancelar</button>
                             @endif
@@ -97,6 +104,84 @@
     <div>
         {{ $reservas->links() }}
     </div>
+
+    <!-- Modal Extensão de Reserva -->
+    @if($mostrarModalExtensao && $reservaSelecionada)
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Estender Reserva</h3>
+            
+            @if (session()->has('error'))
+                <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if (session()->has('success'))
+                <div class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            <div class="space-y-4">
+                <div>
+                    <p class="text-sm text-gray-600">Cliente: <span class="font-semibold">{{ $reservaSelecionada->cliente->nome }}</span></p>
+                    <p class="text-sm text-gray-600">Quarto: <span class="font-semibold">{{ $reservaSelecionada->quarto->numero }}</span></p>
+                    <p class="text-sm text-gray-600">Data de Saída Atual: <span class="font-semibold">{{ $reservaSelecionada->data_saida->format('d/m/Y') }}</span></p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Dias Adicionais *</label>
+                    <input type="number" 
+                           wire:model="diasAdicionais" 
+                           min="1" 
+                           max="30"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 @error('diasAdicionais') border-red-500 @enderror"
+                           required>
+                    @error('diasAdicionais') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                </div>
+
+                @if($diasAdicionais > 0)
+                @php
+                    $novaDataSaida = \Carbon\Carbon::parse($reservaSelecionada->data_saida)->addDays($diasAdicionais);
+                    $valorAdicional = $diasAdicionais * $reservaSelecionada->quarto->preco_diaria;
+                    $novoValorTotal = $reservaSelecionada->valor_total + $valorAdicional;
+                @endphp
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <span>Nova Data de Saída:</span>
+                        <span class="font-semibold">{{ $novaDataSaida->format('d/m/Y') }}</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>Valor Atual:</span>
+                        <span>R$ {{ number_format($reservaSelecionada->valor_total, 2, ',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>Valor Adicional:</span>
+                        <span>R$ {{ number_format($valorAdicional, 2, ',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-lg border-t pt-2">
+                        <span>Novo Total:</span>
+                        <span>R$ {{ number_format($novoValorTotal, 2, ',', '.') }}</span>
+                    </div>
+                </div>
+                @endif
+
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" 
+                            wire:click="$set('mostrarModalExtensao', false)" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Cancelar
+                    </button>
+                    <button wire:click="estender" 
+                            class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+                        Confirmar Extensão
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 @endsection
 

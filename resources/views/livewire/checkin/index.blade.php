@@ -4,7 +4,14 @@
 
 @section('content')
 <div class="space-y-6">
-    <h2 class="text-2xl font-bold text-gray-800">Check-in / Check-out</h2>
+    <div class="flex justify-between items-center">
+        <h2 class="text-2xl font-bold text-gray-800">Check-in / Check-out</h2>
+        <button wire:click="abrirCheckinDireto" 
+                class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2">
+            <i class="bi bi-plus-circle"></i>
+            Check-in Direto
+        </button>
+    </div>
 
     <!-- Check-ins Pendentes -->
     <div class="bg-white rounded-lg shadow p-6">
@@ -142,6 +149,121 @@
                     <button wire:click="realizarCheckout" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Confirmar Check-out</button>
                 </div>
             </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- Modal Check-in Direto -->
+    @if($mostrarCheckinDireto)
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Check-in Direto (Sem Reserva)</h3>
+            
+            @if (session()->has('error'))
+                <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if (session()->has('success'))
+                <div class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            <form wire:submit.prevent="realizarCheckinDireto" class="space-y-4">
+                <!-- Cliente -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Cliente *</label>
+                    <select wire:model="cliente_id" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 @error('cliente_id') border-red-500 @enderror"
+                            required>
+                        <option value="">Selecione um cliente...</option>
+                        @foreach($clientes as $cliente)
+                        <option value="{{ $cliente->id }}">{{ $cliente->nome }}</option>
+                        @endforeach
+                    </select>
+                    @error('cliente_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Quarto -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Quarto *</label>
+                    <select wire:model="quarto_id" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 @error('quarto_id') border-red-500 @enderror"
+                            required>
+                        <option value="">Selecione um quarto...</option>
+                        @foreach($quartosDisponiveis as $quarto)
+                        <option value="{{ $quarto->id }}">
+                            Quarto {{ $quarto->numero }} - {{ $quarto->tipo }} 
+                            (R$ {{ number_format($quarto->preco_diaria, 2, ',', '.') }}/dia)
+                            @if($quarto->estado === 'limpeza')
+                                - Em Limpeza
+                            @endif
+                        </option>
+                        @endforeach
+                    </select>
+                    @error('quarto_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Data de Entrada -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Data de Entrada *</label>
+                    <input type="date" 
+                           wire:model="data_entrada" 
+                           max="{{ date('Y-m-d') }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 @error('data_entrada') border-red-500 @enderror"
+                           required>
+                    @error('data_entrada') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Data de Saída -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Previsão de Saída *</label>
+                    <input type="date" 
+                           wire:model="data_saida" 
+                           min="{{ $data_entrada ? date('Y-m-d', strtotime($data_entrada . ' +1 day')) : date('Y-m-d', strtotime('+1 day')) }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 @error('data_saida') border-red-500 @enderror"
+                           required>
+                    @error('data_saida') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                </div>
+
+                @if($quarto_id && $data_entrada && $data_saida)
+                @php
+                    $quarto = \App\Models\Quarto::find($quarto_id);
+                    $entrada = \Carbon\Carbon::parse($data_entrada);
+                    $saida = \Carbon\Carbon::parse($data_saida);
+                    $dias = $entrada->diffInDays($saida);
+                    $valorTotal = $quarto ? $dias * $quarto->preco_diaria : 0;
+                @endphp
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <span>Período:</span>
+                        <span>{{ $dias }} dia(s)</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>Valor da Diária:</span>
+                        <span>R$ {{ $quarto ? number_format($quarto->preco_diaria, 2, ',', '.') : '0,00' }}</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-lg border-t pt-2">
+                        <span>Total Estimado:</span>
+                        <span>R$ {{ number_format($valorTotal, 2, ',', '.') }}</span>
+                    </div>
+                </div>
+                @endif
+
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" 
+                            wire:click="$set('mostrarCheckinDireto', false)" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        Confirmar Check-in
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
     @endif

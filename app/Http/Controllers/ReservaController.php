@@ -174,5 +174,63 @@ class ReservaController extends Controller
 
         return response()->json($quartos);
     }
+
+    /**
+     * Estende (renova) uma reserva ativa adicionando mais dias
+     * Verifica disponibilidade do quarto antes de estender
+     */
+    public function estender($id, Request $request)
+    {
+        $reserva = Reserva::with(['quarto'])->findOrFail($id);
+
+        // Valida se a reserva está em check-in (ativa)
+        if ($reserva->status !== 'checkin') {
+            return redirect()->route('admin.reservas.index')
+                ->with('error', 'Apenas reservas em check-in podem ser estendidas!');
+        }
+
+        $validated = $request->validate([
+            'dias_adicionais' => 'required|integer|min:1|max:30',
+        ]);
+
+        $diasAdicionais = $validated['dias_adicionais'];
+        $novaDataSaida = Carbon::parse($reserva->data_saida)->addDays($diasAdicionais);
+        $dataEntradaAtual = Carbon::parse($reserva->data_entrada);
+
+        // Verifica se o quarto está disponível para o período adicional
+        // Exclui a própria reserva da verificação
+        $quartosOcupados = Reserva::where('quarto_id', $reserva->quarto_id)
+            ->where('id', '!=', $reserva->id) // Exclui a própria reserva
+            ->where(function($q) use ($reserva, $novaDataSaida) {
+                $q->whereBetween('data_entrada', [$reserva->data_saida, $novaDataSaida])
+                  ->orWhereBetween('data_saida', [$reserva->data_saida, $novaDataSaida])
+                  ->orWhere(function($q2) use ($reserva, $novaDataSaida) {
+                      $q2->where('data_entrada', '<=', $reserva->data_saida)
+                         ->where('data_saida', '>=', $novaDataSaida);
+                  });
+            })
+            ->whereIn('status', ['pendente', 'confirmada', 'checkin'])
+            ->exists();
+
+        if ($quartosOcupados) {
+            return redirect()->route('admin.reservas.index')
+                ->with('error', 'O quarto não está disponível para o período adicional solicitado!');
+        }
+
+        // Calcula o valor adicional
+        $valorAdicional = $diasAdicionais * $reserva->quarto->preco_diaria;
+        $novoValorTotal = $reserva->valor_total + $valorAdicional;
+
+        // Atualiza a reserva
+        $reserva->update([
+            'data_saida' => $novaDataSaida,
+            'valor_total' => $novoValorTotal,
+        ]);
+
+        // O log de atividades será registrado automaticamente pelo Spatie Activity Log
+
+        return redirect()->route('admin.reservas.index')
+            ->with('success', "Reserva estendida com sucesso! Adicionados {$diasAdicionais} dia(s). Novo valor: R$ " . number_format($novoValorTotal, 2, ',', '.'));
+    }
 }
 

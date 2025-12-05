@@ -74,6 +74,12 @@ class Reserva extends Model
         return $this->hasOne(NotaCobranca::class);
     }
 
+    /**
+     * Calcula o valor total da reserva
+     * Inclui diárias (baseado no período) e serviços extras
+     * 
+     * @return float
+     */
     public function calcularValorTotal()
     {
         $dias = Carbon::parse($this->data_entrada)->diffInDays(Carbon::parse($this->data_saida));

@@ -85,6 +85,14 @@
                                         </button>
                                     </form>
                                 @endif
+                                @if($reserva->status === 'checkin')
+                                    <button type="button" class="btn btn-outline-warning" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalExtensao{{ $reserva->id }}" 
+                                            title="Estender Reserva">
+                                        <i class="bi bi-calendar-plus"></i>
+                                    </button>
+                                @endif
                                 @if(!in_array($reserva->status, ['checkout', 'cancelada']))
                                     <form action="{{ route('admin.reservas.cancelar', $reserva->id) }}" method="POST" class="d-inline">
                                         @csrf
@@ -112,5 +120,52 @@
         {{ $reservas->links() }}
     </div>
 </div>
+
+<!-- Modais de Extensão -->
+@foreach($reservas as $reserva)
+@if($reserva->status === 'checkin')
+<div class="modal fade" id="modalExtensao{{ $reserva->id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ route('admin.reservas.estender', $reserva->id) }}" method="POST">
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title">Estender Reserva</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <p class="text-muted mb-2"><strong>Cliente:</strong> {{ $reserva->cliente->nome }}</p>
+                        <p class="text-muted mb-2"><strong>Quarto:</strong> {{ $reserva->quarto->numero }}</p>
+                        <p class="text-muted mb-2"><strong>Data de Saída Atual:</strong> {{ $reserva->data_saida->format('d/m/Y') }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dias_adicionais{{ $reserva->id }}" class="form-label">Dias Adicionais *</label>
+                        <input type="number" 
+                               name="dias_adicionais" 
+                               id="dias_adicionais{{ $reserva->id }}"
+                               class="form-control" 
+                               min="1" 
+                               max="30" 
+                               value="1" 
+                               required>
+                        <small class="text-muted">Máximo de 30 dias</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <small>
+                            <strong>Nota:</strong> O sistema verificará a disponibilidade do quarto antes de estender a reserva.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">Confirmar Extensão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
+@endforeach
 @endsection
 
